@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- sürüm: 0.1.0 -->
+<resources>
+    <string name="app_name">Aile Kontrol</string>
+    <string name="admin_aciklama">Bu uygulama ebeveyn kontrolü için cihaz yöneticisi olarak çalışır. Kaldırmak veya güncellemek yalnızca ebeveyn parolasıyla mümkündür.</string>
+</resources>
