@@ -1,4 +1,4 @@
-# sürüm: 0.1.0 — GitHub'da otomatik APK derleme
+# sürüm: 0.2.0 — GitHub'da otomatik APK derleme
 name: APK Derle
 
 on:
@@ -22,13 +22,15 @@ jobs:
       - name: Android SDK kur
         uses: android-actions/setup-android@v3
 
-      - name: Gradle wrapper hazırla (8.9)
-        run: gradle wrapper --gradle-version 8.9
+      - name: Gradle kur (8.9)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
       - name: Debug APK derle
-        run: ./gradlew assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
 
-      - name: APK'yı yükle
+      - name: APK'yi yukle
         uses: actions/upload-artifact@v4
         with:
           name: aile-kontrol-cocuk-debug-apk
