@@ -1,4 +1,4 @@
-// sürüm: 0.3.0
+// sürüm: 0.4.0
 import java.util.Base64
 
 plugins {
@@ -14,6 +14,8 @@ keystoreFile.writeBytes(Base64.getDecoder().decode(b64File.readText().trim()))
 }
 }
 
+val surumKodu = (System.getenv("VERSION_CODE") ?: "1").toInt()
+
 android {
 namespace = "com.monur.ailekontrol"
 compileSdk = 35
@@ -22,8 +24,12 @@ defaultConfig {
 applicationId = "com.monur.ailekontrol"
 minSdk = 24
 targetSdk = 35
-versionCode = 1
-versionName = "0.1.0"
+versionCode = surumKodu
+versionName = "1.0.$surumKodu"
+}
+
+buildFeatures {
+buildConfig = true
 }
 
 signingConfigs {
