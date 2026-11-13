@@ -1,0 +1,36 @@
+# sürüm: 0.1.0 — GitHub'da otomatik APK derleme
+name: APK Derle
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: Java 17 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK kur
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle wrapper hazırla (8.9)
+        run: gradle wrapper --gradle-version 8.9
+
+      - name: Debug APK derle
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: APK'yı yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: aile-kontrol-cocuk-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
