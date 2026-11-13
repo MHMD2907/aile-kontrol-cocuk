@@ -1,4 +1,4 @@
-# sürüm: 0.2.0 — GitHub'da otomatik APK derleme
+# sürüm: 0.3.0 — GitHub'da otomatik APK derleme
 name: APK Derle
 
 on:
@@ -18,9 +18,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Android SDK kur
-        uses: android-actions/setup-android@v3
 
       - name: Gradle kur (8.9)
         uses: gradle/actions/setup-gradle@v4
