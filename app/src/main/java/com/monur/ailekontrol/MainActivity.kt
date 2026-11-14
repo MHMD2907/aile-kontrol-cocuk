@@ -1,4 +1,4 @@
-// surum: 0.6.0 - M-ONUR Aile Cocuk Kontrol (cocuk) - ana ekran
+// surum: 0.7.0 - M-ONUR Aile Cocuk Kontrol (cocuk) - ana ekran
 package com.monur.ailekontrol
 
 import android.Manifest
@@ -14,11 +14,14 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
+import android.text.InputType
 import android.view.Gravity
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -34,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var durum: TextView
     private lateinit var izinDurum: TextView
     private lateinit var rapor: TextView
+    private lateinit var btnBaglan: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,6 +62,10 @@ class MainActivity : AppCompatActivity() {
         izinDurum.textSize = 15f
         izinDurum.setPadding(0, 8, 0, 16)
 
+        btnBaglan = Button(this)
+        btnBaglan.text = "Aileye Baglan (ebeveyn kodu ile)"
+        btnBaglan.setOnClickListener { aileyeBaglan() }
+
         val btnKoruma = Button(this)
         btnKoruma.text = "Korumayi Etkinlestir"
         btnKoruma.setOnClickListener { yoneticiIste() }
@@ -71,6 +79,10 @@ class MainActivity : AppCompatActivity() {
         btnUstte.setOnClickListener {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + packageName)))
         }
+
+        val btnKonum = Button(this)
+        btnKonum.text = "Izin: Konum (her zaman)"
+        btnKonum.setOnClickListener { konumIzniIste() }
 
         val btnEbeveyn = Button(this)
         btnEbeveyn.text = "Ebeveyn Ayarlari (PIN)"
@@ -87,9 +99,11 @@ class MainActivity : AppCompatActivity() {
         kok.addView(baslik)
         kok.addView(durum)
         kok.addView(izinDurum)
+        kok.addView(btnBaglan)
         kok.addView(btnKoruma)
         kok.addView(btnKullanim)
         kok.addView(btnUstte)
+        kok.addView(btnKonum)
         kok.addView(btnEbeveyn)
         kok.addView(btnRapor)
         kok.addView(rapor)
@@ -109,6 +123,44 @@ class MainActivity : AppCompatActivity() {
         servisiBaslat()
     }
 
+    private fun aileyeBaglan() {
+        val alan = LinearLayout(this)
+        alan.orientation = LinearLayout.VERTICAL
+        alan.setPadding(48, 16, 48, 0)
+        val kodAlan = EditText(this)
+        kodAlan.hint = "6 haneli kod"
+        kodAlan.inputType = InputType.TYPE_CLASS_NUMBER
+        val adAlan = EditText(this)
+        adAlan.hint = "Cihaz adi (or. Ahmet'in Tableti)"
+        alan.addView(kodAlan)
+        alan.addView(adAlan)
+        AlertDialog.Builder(this)
+            .setTitle("Aileye Baglan")
+            .setMessage("Ebeveyn uygulamasinda 'Cocuk Cihazi Ekle'ye basin ve cikan kodu girin.")
+            .setView(alan)
+            .setPositiveButton("Baglan") { _, _ ->
+                val kod = kodAlan.text.toString().trim()
+                val ad = adAlan.text.toString().trim().ifEmpty { Build.MODEL }
+                if (kod.length != 6) {
+                    Toast.makeText(this, "Kod 6 haneli olmali", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                Toast.makeText(this, "Baglaniyor...", Toast.LENGTH_SHORT).show()
+                Senkron.eslestir(this, kod, ad) { basarili, mesaj ->
+                    runOnUiThread {
+                        Toast.makeText(this, mesaj, Toast.LENGTH_LONG).show()
+                        if (basarili) {
+                            durumuGuncelle()
+                            stopService(Intent(this, KontrolServisi::class.java))
+                            servisiBaslat()
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("Iptal", null)
+            .show()
+    }
+
     private fun ebeveynAyarlari() {
         if (Ayarlar.pin(this).isEmpty()) {
             pinBelirle(this) { startActivity(Intent(this, AyarlarActivity::class.java)) }
@@ -122,6 +174,26 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+    }
+
+    private fun konumVar(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun arkaPlanKonumVar(): Boolean =
+        Build.VERSION.SDK_INT < 29 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun konumIzniIste() {
+        if (!konumVar()) {
+            requestPermissions(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 2
+            )
+        } else if (!arkaPlanKonumVar()) {
+            Toast.makeText(this, "Acilan ekranda 'Her zaman izin ver'i secin", Toast.LENGTH_LONG).show()
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 3)
+        } else {
+            Toast.makeText(this, "Konum izni tamam", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -146,12 +218,19 @@ class MainActivity : AppCompatActivity() {
         else
             "Koruma PASIF - 'Korumayi Etkinlestir' butonuna basin."
 
+        val bagli = Ayarlar.bagli(this)
+        btnBaglan.isEnabled = !bagli
+        btnBaglan.text = if (bagli) "Aileye bagli: " + Ayarlar.cihazAdi(this) else "Aileye Baglan (ebeveyn kodu ile)"
+
         val kullanim = if (kullanimIzniVar()) "VAR" else "YOK"
         val ustte = if (Settings.canDrawOverlays(this)) "VAR" else "YOK"
+        val konum = if (konumVar() && arkaPlanKonumVar()) "VAR" else if (konumVar()) "SADECE ACIKKEN" else "YOK"
         val pin = if (Ayarlar.pin(this).isEmpty()) "BELIRLENMEDI" else "VAR"
         val kontrol = if (kullanimIzniVar() && Settings.canDrawOverlays(this)) "CALISIYOR" else "IZIN BEKLIYOR"
-        izinDurum.text = "Kullanim erisimi: " + kullanim +
+        izinDurum.text = "Aile baglantisi: " + (if (bagli) "BAGLI" else "YOK") +
+            "\nKullanim erisimi: " + kullanim +
             "\nUstte gosterme: " + ustte +
+            "\nKonum: " + konum +
             "\nEbeveyn PIN: " + pin +
             "\nKontrol servisi: " + kontrol
     }

@@ -1,4 +1,4 @@
-// surum: 0.6.1 - M-ONUR Aile Cocuk Kontrol - arka plan kontrol servisi (Ayarlar PIN korumali)
+// surum: 0.7.0 - M-ONUR Aile Cocuk Kontrol - arka plan kontrol servisi (bulut baglantili)
 package com.monur.ailekontrol
 
 import android.app.NotificationChannel
@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import com.google.firebase.firestore.ListenerRegistration
 import java.util.Calendar
 
 class KontrolServisi : Service() {
@@ -22,6 +23,12 @@ class KontrolServisi : Service() {
     private var mevcut: String? = null
     private var toplamOnbellek = 0L
     private var toplamZaman = 0L
+
+    private var dinleyici: ListenerRegistration? = null
+    private var dinleyiciKuruluyor = false
+    private var sonDurum = 0L
+    private var sonKonum = 0L
+    private var sonUygulamaListesi = 0L
 
     // Limit/uyku saatinde bile acik kalacak paketler (telefon, sistem)
     private val herZamanIzinli = setOf(
@@ -50,6 +57,10 @@ class KontrolServisi : Service() {
                 kontrol()
             } catch (e: Exception) {
             }
+            try {
+                bulutIsleri()
+            } catch (e: Exception) {
+            }
             handler.postDelayed(this, 2000)
         }
     }
@@ -66,6 +77,8 @@ class KontrolServisi : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(dongu)
+        dinleyici?.remove()
+        dinleyici = null
         super.onDestroy()
     }
 
@@ -89,6 +102,47 @@ class KontrolServisi : Service() {
             startForeground(1, bildirim)
         }
     }
+
+    // ---------- Bulut (ebeveyn uygulamasi ile baglanti) ----------
+
+    private fun bulutIsleri() {
+        if (!Ayarlar.bagli(this)) return
+        if (dinleyici == null) {
+            if (dinleyiciKuruluyor) return
+            dinleyiciKuruluyor = true
+            Bulut.girisYap(this, {
+                dinleyici = Senkron.cihazRef(this).addSnapshotListener { d, _ ->
+                    if (d != null && d.exists()) {
+                        Senkron.uzakAyarUygula(this, d)
+                        val istek = d.getLong("konumIste") ?: 0L
+                        if (istek > Ayarlar.sonKonumIstegi(this)) {
+                            Ayarlar.sonKonumIstegiKaydet(this, istek)
+                            Senkron.konumGonder(this)
+                        }
+                    }
+                }
+                dinleyiciKuruluyor = false
+            }, {
+                dinleyiciKuruluyor = false
+            })
+            return
+        }
+        val simdi = System.currentTimeMillis()
+        if (simdi - sonDurum > 60000) {
+            sonDurum = simdi
+            Senkron.durumGonder(this)
+        }
+        if (simdi - sonKonum > 15 * 60000) {
+            sonKonum = simdi
+            Senkron.konumGonder(this)
+        }
+        if (simdi - sonUygulamaListesi > 6 * 3600000L) {
+            sonUygulamaListesi = simdi
+            Senkron.uygulamaListesiGonder(this)
+        }
+    }
+
+    // ---------- Yerel kontrol ----------
 
     @Suppress("DEPRECATION")
     private fun onPlandakiUygulama(): String? {
@@ -129,6 +183,9 @@ class KontrolServisi : Service() {
 
     private fun engelSebebi(pkg: String): String? {
         if (System.currentTimeMillis() < Ayarlar.geciciIzinBitis(this)) return null
+        if (Ayarlar.kilitli(this)) {
+            return "Cihaz ebeveyn tarafindan kilitlendi."
+        }
         if (Ayarlar.pin(this).isNotEmpty() && pinKorumali.contains(pkg)) {
             return "Ayarlar ebeveyn PIN'i ile korunuyor."
         }

@@ -1,4 +1,4 @@
-// surum: 0.6.0 - M-ONUR Aile Cocuk Kontrol - ebeveyn ayarlari
+// surum: 0.7.0 - M-ONUR Aile Cocuk Kontrol - ebeveyn ayarlari (bulut senkron)
 package com.monur.ailekontrol
 
 import android.content.Intent
@@ -70,7 +70,7 @@ class AyarlarActivity : AppCompatActivity() {
 
         val pinDegis = Button(this)
         pinDegis.text = "PIN Degistir"
-        pinDegis.setOnClickListener { pinBelirle(this) {} }
+        pinDegis.setOnClickListener { pinBelirle(this) { Senkron.ayarlariYukle(this) } }
         kok.addView(pinDegis)
 
         val altKaydet = Button(this)
@@ -95,6 +95,7 @@ class AyarlarActivity : AppCompatActivity() {
         Ayarlar.limitKaydet(this, limitAlan.text.toString().trim().toIntOrNull() ?: 0)
         Ayarlar.yatisKaydet(this, dkOku(basAlan.text.toString()), dkOku(bitAlan.text.toString()))
         Ayarlar.engelliKaydet(this, kutular.filter { it.second.isChecked }.map { it.first }.toSet())
+        Senkron.ayarlariYukle(this)
         Toast.makeText(this, "Ayarlar kaydedildi", Toast.LENGTH_SHORT).show()
         finish()
     }

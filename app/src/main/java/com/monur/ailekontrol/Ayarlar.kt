@@ -1,4 +1,4 @@
-// surum: 0.6.0 - M-ONUR Aile Cocuk Kontrol - ayarlar ve PIN
+// surum: 0.7.0 - M-ONUR Aile Cocuk Kontrol - ayarlar, PIN ve aile baglantisi
 package com.monur.ailekontrol
 
 import android.content.Context
@@ -31,6 +31,29 @@ object Ayarlar {
     fun geciciIzinBitis(c: Context): Long = sp(c).getLong("gecici_izin", 0L)
     fun geciciIzinVer(c: Context, dk: Int) =
         sp(c).edit().putLong("gecici_izin", System.currentTimeMillis() + dk * 60000L).apply()
+
+    // Uzaktan kilit (ebeveyn uygulamasindan)
+    fun kilitli(c: Context): Boolean = sp(c).getBoolean("kilitli", false)
+    fun kilitliKaydet(c: Context, k: Boolean) = sp(c).edit().putBoolean("kilitli", k).apply()
+
+    // Aile baglantisi
+    fun aileId(c: Context): String = sp(c).getString("aile_id", "") ?: ""
+    fun cihazAdi(c: Context): String = sp(c).getString("cihaz_adi", "") ?: ""
+    fun bagli(c: Context): Boolean = aileId(c).isNotEmpty()
+    fun eslesmeKaydet(c: Context, aileId: String, ad: String) =
+        sp(c).edit().putString("aile_id", aileId).putString("cihaz_adi", ad).apply()
+
+    fun cihazId(c: Context): String {
+        var id = sp(c).getString("cihaz_id", "") ?: ""
+        if (id.isEmpty()) {
+            id = java.util.UUID.randomUUID().toString().replace("-", "").take(20)
+            sp(c).edit().putString("cihaz_id", id).apply()
+        }
+        return id
+    }
+
+    fun sonKonumIstegi(c: Context): Long = sp(c).getLong("son_konum_istegi", 0L)
+    fun sonKonumIstegiKaydet(c: Context, t: Long) = sp(c).edit().putLong("son_konum_istegi", t).apply()
 }
 
 fun pinSor(a: AppCompatActivity, basarili: () -> Unit) {

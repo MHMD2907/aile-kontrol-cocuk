@@ -1,4 +1,4 @@
-// sürüm: 0.1.0
+// surum: 0.2.0 - cocuk (app) + ebeveyn modulleri
 pluginManagement {
     repositories {
         google()
@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "AileKontrolCocuk"
 include(":app")
+include(":ebeveyn")
