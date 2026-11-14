@@ -1,13 +1,16 @@
-// surum: 0.5.0 - M-ONUR Aile Cocuk Kontrol (cocuk)
+// surum: 0.6.0 - M-ONUR Aile Cocuk Kontrol (cocuk) - ana ekran
 package com.monur.ailekontrol
 
+import android.Manifest
 import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
 import android.app.usage.UsageStatsManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
@@ -18,6 +21,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import java.net.URL
 import java.util.Calendar
@@ -28,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var dpm: DevicePolicyManager
     private lateinit var admin: ComponentName
     private lateinit var durum: TextView
+    private lateinit var izinDurum: TextView
     private lateinit var rapor: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,21 +52,33 @@ class MainActivity : AppCompatActivity() {
         durum = TextView(this)
         durum.textSize = 16f
         durum.gravity = Gravity.CENTER
-        durum.setPadding(0, 24, 0, 24)
+        durum.setPadding(0, 24, 0, 8)
 
-        val btn = Button(this)
-        btn.text = "Korumayi Etkinlestir"
-        btn.setOnClickListener { yoneticiIste() }
+        izinDurum = TextView(this)
+        izinDurum.textSize = 15f
+        izinDurum.setPadding(0, 8, 0, 16)
 
-        val raporBtn = Button(this)
-        raporBtn.text = "Kullanim Raporunu Yenile"
-        raporBtn.setOnClickListener {
-            if (kullanimIzniVar()) {
-                raporuGoster()
-            } else {
-                startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-            }
+        val btnKoruma = Button(this)
+        btnKoruma.text = "Korumayi Etkinlestir"
+        btnKoruma.setOnClickListener { yoneticiIste() }
+
+        val btnKullanim = Button(this)
+        btnKullanim.text = "Izin: Kullanim Erisimi"
+        btnKullanim.setOnClickListener { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+
+        val btnUstte = Button(this)
+        btnUstte.text = "Izin: Diger Uygulamalarin Ustunde Goster"
+        btnUstte.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + packageName)))
         }
+
+        val btnEbeveyn = Button(this)
+        btnEbeveyn.text = "Ebeveyn Ayarlari (PIN)"
+        btnEbeveyn.setOnClickListener { ebeveynAyarlari() }
+
+        val btnRapor = Button(this)
+        btnRapor.text = "Kullanim Raporunu Yenile"
+        btnRapor.setOnClickListener { raporuGoster() }
 
         rapor = TextView(this)
         rapor.textSize = 16f
@@ -69,15 +86,19 @@ class MainActivity : AppCompatActivity() {
 
         kok.addView(baslik)
         kok.addView(durum)
-        kok.addView(btn)
-        kok.addView(raporBtn)
+        kok.addView(izinDurum)
+        kok.addView(btnKoruma)
+        kok.addView(btnKullanim)
+        kok.addView(btnUstte)
+        kok.addView(btnEbeveyn)
+        kok.addView(btnRapor)
         kok.addView(rapor)
 
         val kaydirma = ScrollView(this)
         kaydirma.addView(kok)
         setContentView(kaydirma)
 
-        durumuGuncelle()
+        bildirimIzniIste()
         guncellemeKontrol()
     }
 
@@ -85,6 +106,29 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         durumuGuncelle()
         raporuGoster()
+        servisiBaslat()
+    }
+
+    private fun ebeveynAyarlari() {
+        if (Ayarlar.pin(this).isEmpty()) {
+            pinBelirle(this) { startActivity(Intent(this, AyarlarActivity::class.java)) }
+        } else {
+            pinSor(this) { startActivity(Intent(this, AyarlarActivity::class.java)) }
+        }
+    }
+
+    private fun bildirimIzniIste() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+    }
+
+    private fun servisiBaslat() {
+        if (kullanimIzniVar() && Settings.canDrawOverlays(this)) {
+            ContextCompat.startForegroundService(this, Intent(this, KontrolServisi::class.java))
+        }
     }
 
     private fun yoneticiIste() {
@@ -98,9 +142,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun durumuGuncelle() {
         durum.text = if (dpm.isAdminActive(admin))
-        "Koruma AKTIF - yalnizca ebeveyn kaldirabilir."
+            "Koruma AKTIF - yalnizca ebeveyn kaldirabilir."
         else
-        "Koruma PASIF - etkinlestirmek icin butona dokunun."
+            "Koruma PASIF - 'Korumayi Etkinlestir' butonuna basin."
+
+        val kullanim = if (kullanimIzniVar()) "VAR" else "YOK"
+        val ustte = if (Settings.canDrawOverlays(this)) "VAR" else "YOK"
+        val pin = if (Ayarlar.pin(this).isEmpty()) "BELIRLENMEDI" else "VAR"
+        val kontrol = if (kullanimIzniVar() && Settings.canDrawOverlays(this)) "CALISIYOR" else "IZIN BEKLIYOR"
+        izinDurum.text = "Kullanim erisimi: " + kullanim +
+            "\nUstte gosterme: " + ustte +
+            "\nEbeveyn PIN: " + pin +
+            "\nKontrol servisi: " + kontrol
     }
 
     @Suppress("DEPRECATION")
@@ -113,7 +166,7 @@ class MainActivity : AppCompatActivity() {
     @Suppress("DEPRECATION")
     private fun raporuGoster() {
         if (!kullanimIzniVar()) {
-            rapor.text = "Kullanim raporu icin izin gerekli. 'Kullanim Raporunu Yenile' butonuna basin, listeden Aile Cocuk Kontrol'u bulup izni acin."
+            rapor.text = "Kullanim raporu icin 'Izin: Kullanim Erisimi' butonuna basip Aile Cocuk Kontrol'e izin verin."
             return
         }
         val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
@@ -123,7 +176,9 @@ class MainActivity : AppCompatActivity() {
         cal.set(Calendar.SECOND, 0)
         cal.set(Calendar.MILLISECOND, 0)
         val veriler = usm.queryAndAggregateUsageStats(cal.timeInMillis, System.currentTimeMillis())
-        val liste = veriler.values.filter { it.totalTimeInForeground > 60000 }.sortedByDescending { it.totalTimeInForeground }
+        val liste = veriler.values
+            .filter { it.totalTimeInForeground > 60000 }
+            .sortedByDescending { it.totalTimeInForeground }
         var toplam = 0L
         val sb = StringBuilder()
         for (u in liste) {
@@ -135,8 +190,10 @@ class MainActivity : AppCompatActivity() {
             }
             sb.append(ad).append(": ").append(sureYaz(u.totalTimeInForeground)).append("\n")
         }
+        val limit = Ayarlar.gunlukLimitDk(this)
+        val limitYazi = if (limit > 0) "\nGUNLUK LIMIT: " + limit + " dk" else "\nGUNLUK LIMIT: yok"
         val detay = if (sb.isEmpty()) "Henuz kullanim yok." else sb.toString()
-        rapor.text = "BUGUN TOPLAM EKRAN SURESI: " + sureYaz(toplam) + "\n\n" + detay
+        rapor.text = "BUGUN TOPLAM EKRAN SURESI: " + sureYaz(toplam) + limitYazi + "\n\n" + detay
     }
 
     private fun sureYaz(ms: Long): String {
@@ -161,13 +218,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun guncellemeSor() {
         AlertDialog.Builder(this)
-        .setTitle("Yeni surum var")
-        .setMessage("Guncel surum mevcut. Indirip kurmak ister misiniz?")
-        .setPositiveButton("Guncelle") { _, _ ->
-            val url = "https://github.com/MHMD2907/aile-kontrol-cocuk/releases/latest/download/app-debug.apk"
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }
-        .setNegativeButton("Sonra", null)
-        .show()
+            .setTitle("Yeni surum var")
+            .setMessage("Guncel surum mevcut. Indirip kurmak ister misiniz?")
+            .setPositiveButton("Guncelle") { _, _ ->
+                val url = "https://github.com/MHMD2907/aile-kontrol-cocuk/releases/latest/download/app-debug.apk"
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
+            .setNegativeButton("Sonra", null)
+            .show()
     }
 }
